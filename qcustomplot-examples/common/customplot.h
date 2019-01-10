@@ -8,6 +8,7 @@ class CustomPlot : public QCustomPlot
     Q_OBJECT
 public:
     CustomPlot(QWidget *parent = Q_NULLPTR);
+    virtual ~CustomPlot() Q_DECL_OVERRIDE;
 
 Q_SIGNALS:
     void sizeChanged(const QSize &size);

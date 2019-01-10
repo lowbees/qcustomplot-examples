@@ -36,6 +36,13 @@ protected:
     QCPItemText *mTracerText;
     QCPItemCurve *mTracerArrow;
     QCPGraph *mTargetGraph;
+
+    bool mTracing;
+    double mKey, mValue;
+
+protected:
+    void updateHLine(double value);
+    void updateVLine(double key);
 };
 
 #endif // CROSSLINE_H

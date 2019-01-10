@@ -3,7 +3,7 @@
 
 #include <QObject>
 #include <QCursor>
-#include <QMap>
+#include <QHash>
 
 class CursorHelper : public QObject
 {
@@ -17,7 +17,7 @@ public:
     QCursor cursor(QObject *item);
 
 
-private Q_SLOTS:
+public Q_SLOTS:
     void remove(QObject *item);
 
 private:
@@ -25,7 +25,7 @@ private:
     ~CursorHelper();
 private:
     static CursorHelper *mInstance;
-    QMap<QObject*, QCursor> mCursors;
+    QHash<QObject*, QCursor> mCursors;
 };
 
 #endif // CURSORHELPER_H

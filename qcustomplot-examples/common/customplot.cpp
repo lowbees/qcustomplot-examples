@@ -7,6 +7,11 @@ CustomPlot::CustomPlot(QWidget *parent)
     setSelectionTolerance(6);
 }
 
+CustomPlot::~CustomPlot()
+{
+    CursorHelper::release();
+}
+
 
 void CustomPlot::mousePressEvent(QMouseEvent *event)
 {
