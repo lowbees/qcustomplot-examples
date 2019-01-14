@@ -3,12 +3,24 @@
 #include "../common/crossline.h"
 
 #include <QDebug>
+#include <QVBoxLayout>
+#include <QComboBox>
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     CustomPlot *customPlot = new CustomPlot;
-    setCentralWidget(customPlot);
+    QComboBox *comboBox = new QComboBox;
+    comboBox->addItems(QStringList() << "Free" << "Follow Cursor" << "Tracing");
 
+    QVBoxLayout *layout = new QVBoxLayout;
+    layout->addWidget(comboBox);
+    layout->addWidget(customPlot);
+
+    QWidget *widget = new QWidget;
+
+    widget->setLayout(layout);
+    setCentralWidget(widget);
 
     customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
     customPlot->graph()->setPen(QPen(Qt::blue));
@@ -24,6 +36,9 @@ MainWindow::MainWindow(QWidget *parent)
     customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectItems);
 
     CrossLine *crossLine = new CrossLine(customPlot, customPlot->graph());
+    connect(comboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),  [crossLine](int index) {
+        crossLine->setLineMode(CrossLine::LineMode(index));
+    });
     connect(customPlot, SIGNAL(itemMoved(QCPAbstractItem*,QMouseEvent*)),
             crossLine, SLOT(onItemMoved(QCPAbstractItem*,QMouseEvent*)));
 
@@ -35,6 +50,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(customPlot, &QCustomPlot::mouseRelease, [customPlot](){
         customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectItems);
     });
+
+    showMaximized();
 }
 
 MainWindow::~MainWindow()

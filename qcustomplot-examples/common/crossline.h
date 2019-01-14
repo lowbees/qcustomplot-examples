@@ -53,6 +53,7 @@ protected:
     double mKey, mValue;
 
 protected:
+    void updateTracer();
     void updateHLine(double value);
     void updateVLine(double key);
 };

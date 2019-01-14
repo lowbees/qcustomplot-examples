@@ -12,8 +12,8 @@ CrossLine::CrossLine(QCustomPlot *parentPlot, QCPGraph *targetGraph)
     , mHText(new QCPItemText(parentPlot))
     , mVText(new QCPItemText(parentPlot))
     , mTracer(new QCPItemTracer(parentPlot))
-//    , mTracerText(new QCPItemText(parentPlot))
-//    , mTracerArrow(new QCPItemCurve(parentPlot))
+    , mTracerText(new QCPItemText(parentPlot))
+    , mTracerArrow(new QCPItemCurve(parentPlot))
     , mTargetGraph(Q_NULLPTR)
     , mKey(0)
     , mValue(0)
@@ -21,16 +21,28 @@ CrossLine::CrossLine(QCustomPlot *parentPlot, QCPGraph *targetGraph)
     const QString layer(QStringLiteral("overlay"));
     const QMargins margins(6, 6, 6, 6);
 
-    mTargetGraph = targetGraph ? targetGraph : mParentPlot->graph();
+    targetGraph = targetGraph ? targetGraph : mParentPlot->graph();
 
-    setLineMode(lmTracing);
+    setGraph(targetGraph);
+    setLineMode(lmFree);
 
-    mTracer->setGraph(mTargetGraph);
-    mTracer->setGraphKey(0);
     mTracer->setBrush(Qt::red);
     mTracer->setInterpolating(true);
     mTracer->setStyle(QCPItemTracer::tsCircle);
 
+    mTracerText->setSelectable(false);
+    mTracerText->setPadding(margins);
+    mTracerText->position->setParentAnchor(mTracer->position);
+    mTracerText->position->setType(QCPItemPosition::ptAbsolute);
+
+    mTracerArrow->start->setParentAnchor(mTracerText->left);
+    mTracerArrow->startDir->setParentAnchor(mTracerArrow->start);
+    mTracerArrow->end->setParentAnchor(mTracer->position);
+    mTracerArrow->endDir->setParentAnchor(mTracerArrow->end);
+    mTracerArrow->setHead(QCPLineEnding::esSpikeArrow);
+    mTracerArrow->setTail(QCPLineEnding(QCPLineEnding::esBar,
+                                        (mTracerText->bottom->pixelPosition().y() -
+                                         mTracerText->top->pixelPosition().y()) * 0.85));
 
     mHLine->start->setType(QCPItemPosition::ptAbsolute);
     mHLine->end->setType(QCPItemPosition::ptAbsolute);
@@ -40,19 +52,13 @@ CrossLine::CrossLine(QCustomPlot *parentPlot, QCPGraph *targetGraph)
     mHLine->setLayer(layer);
     mVLine->setLayer(layer);
     mTracer->setLayer(layer);
+    mTracerText->setLayer(layer);
+    mTracerArrow->setLayer(layer);
 
     mHText->setPadding(margins);
     mHText->setLayer(layer);
     mVText->setPadding(margins);
     mVText->setLayer(layer);
-
-    if (mTargetGraph->keyAxis()->orientation() == Qt::Horizontal) {
-        mHText->position->setParentAnchor(mHLine->start);
-        mVText->position->setParentAnchor(mVLine->end);
-    } else {
-        mHText->position->setParentAnchor(mHLine->end);
-        mVText->position->setParentAnchor(mVLine->start);
-    }
 
     connect(parentPlot, SIGNAL(afterReplot()), this, SLOT(update()));
 }
@@ -67,6 +73,8 @@ void CrossLine::setLineMode(CrossLine::LineMode mode)
     CursorHelper *helper = CursorHelper::instance();
 
     mTracer->setVisible(mode == lmTracing);
+    mTracerText->setVisible(mode == lmTracing);
+    mTracerArrow->setVisible(mode == lmTracing);
     mHLine->setSelectable(mode == lmFree);
     mVLine->setSelectable(mode != lmFollowCursor);
 
@@ -89,10 +97,12 @@ void CrossLine::setLineMode(CrossLine::LineMode mode)
         }
 
         if (mode == lmTracing) {
+            mTracer->setGraphKey(mKey);
             helper->remove(mHLine);
         }
     }
     mLineMode = mode;
+    update();
 }
 
 /*!
@@ -132,14 +142,18 @@ bool CrossLine::lineVisible(Qt::Orientation orientation)
  */
 void CrossLine::setGraph(QCPGraph *graph)
 {
-    if (graph == Q_NULLPTR || graph == mTargetGraph)
-        return;
-
     mTracer->setGraph(graph);
     mTracer->setGraphKey(0);
 
-    mTargetGraph = graph;
-    update();
+    mTargetGraph = graph ? graph : (mTargetGraph ? mTargetGraph : mParentPlot->graph());
+
+    if (mTargetGraph->keyAxis()->orientation() == Qt::Horizontal) {
+        mHText->position->setParentAnchor(mHLine->start);
+        mVText->position->setParentAnchor(mVLine->end);
+    } else {
+        mHText->position->setParentAnchor(mHLine->end);
+        mVText->position->setParentAnchor(mVLine->start);
+    }
 }
 
 void CrossLine::onMouseMoved(QMouseEvent *event)
@@ -179,18 +193,64 @@ void CrossLine::onItemMoved(QCPAbstractItem *item, QMouseEvent *event)
 
 void CrossLine::update()
 {
-    double key = mKey;
-    double value = mValue;
-    if (mLineMode == lmTracing) {
-        mTracer->updatePosition();
-        key = mTracer->position->key();
-        value = mTracer->position->value();
-    }
-    updateHLine(value);
-    updateVLine(key);
-
+    updateTracer();
+    updateHLine(mValue);
+    updateVLine(mKey);
     // we just want replot individual by use overlay layer
-    mParentPlot->layer("overlay")->replot();
+    if (mParentPlot->isVisible() && mParentPlot->layer("overlay")->visible()) // for some cases we need to do this
+        mParentPlot->layer("overlay")->replot();
+}
+
+void CrossLine::updateTracer()
+{
+    if (mLineMode != lmTracing)
+        return;
+
+    mTracer->updatePosition();
+    mKey = mTracer->position->key();
+    mValue = mTracer->position->value();
+
+    QRect rect = mTargetGraph->keyAxis()->axisRect()->rect();
+    QPointF center = rect.center();
+    QPointF pixel = mTracer->position->pixelPosition();
+
+    Qt::Alignment alignment = Qt::AlignTop | Qt::AlignLeft;
+    double offset = qMax(rect.width(), rect.height()) / double(8.0);
+    double offsetX, offsetY;
+
+    const int endOffset = 10;
+    const int endDirOffset = 30;
+    const int startDirOffset = 40;
+
+    if (pixel.x() <= center.x()) {
+        alignment = Qt::AlignLeft;
+        offsetX = offset;
+        mTracerArrow->start->setParentAnchor(mTracerText->left);
+        mTracerArrow->startDir->setCoords(-startDirOffset, 0);
+        mTracerArrow->end->setCoords(endOffset, 0);
+        mTracerArrow->endDir->setCoords(endDirOffset, 0);
+    } else {
+        alignment = Qt::AlignRight;
+        offsetX = -offset;
+        mTracerArrow->start->setParentAnchor(mTracerText->right);
+        mTracerArrow->startDir->setCoords(startDirOffset, 0);
+        mTracerArrow->end->setCoords(-endOffset, 0);
+        mTracerArrow->endDir->setCoords(-endDirOffset, 0);
+    }
+    if (pixel.y() <= center.y()) {
+        alignment |= Qt::AlignTop;
+        offsetY = offset;
+        mTracerArrow->end->setCoords(mTracerArrow->end->coords().x(), endOffset);
+        mTracerArrow->endDir->setCoords(mTracerArrow->endDir->coords().x(), endDirOffset);
+    } else {
+        alignment |= Qt::AlignBottom;
+        offsetY = -offset;
+        mTracerArrow->end->setCoords(mTracerArrow->end->coords().x(), -endOffset);
+        mTracerArrow->endDir->setCoords(mTracerArrow->endDir->coords().x(), -endDirOffset);
+    }
+    mTracerText->position->setCoords(offsetX, offsetY);
+    mTracerText->setPositionAlignment(alignment);
+    mTracerText->setText(QString("(%1, %2)").arg(mKey, 0, 'f', 2).arg(mValue, 0, 'f', 2));
 }
 
 void CrossLine::updateHLine(double value)
@@ -215,7 +275,6 @@ void CrossLine::updateHLine(double value)
         Qt::Alignment alignment = (value >= center.x() ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignBottom;
         mHText->setPositionAlignment(alignment);
     }
-
 }
 
 void CrossLine::updateVLine(double key)
