@@ -63,10 +63,3 @@ QSize CustomPlot::sizeHint() const
 {
     return QSize(400, 300);
 }
-
-
-void CustomPlot::resizeEvent(QResizeEvent *event)
-{
-    QCustomPlot::resizeEvent(event);
-    Q_EMIT sizeChanged(event->size());
-}

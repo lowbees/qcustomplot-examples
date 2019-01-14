@@ -11,7 +11,6 @@ public:
     virtual ~CustomPlot() Q_DECL_OVERRIDE;
 
 Q_SIGNALS:
-    void sizeChanged(const QSize &size);
     void itemMoved(QCPAbstractItem *item, QMouseEvent *event);
 
     // QWidget interface
@@ -19,7 +18,6 @@ protected:
     virtual void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
     virtual void mouseReleaseEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
     virtual void mouseMoveEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
-    virtual void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
 
     // QWidget interface
 public:

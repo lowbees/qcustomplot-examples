@@ -16,8 +16,19 @@ class CrossLine : public QObject
 {
     Q_OBJECT
 public:
+
+    enum LineMode {
+        lmFree,
+        lmFollowCursor,
+        lmTracing
+    };
+    Q_ENUM(LineMode)
+
     explicit CrossLine(QCustomPlot *parentPlot, QCPGraph *targetGraph = Q_NULLPTR);
     ~CrossLine();
+
+    void setLineMode(LineMode mode);
+    LineMode lineMode() const { return mLineMode; }
 
     void setLineVisible(Qt::Orientation orientation, bool visible = true);
     bool lineVisible(Qt::Orientation orientation);
@@ -25,6 +36,7 @@ public:
     void setGraph(QCPGraph *graph);
 
 public Q_SLOTS:
+    void onMouseMoved(QMouseEvent *event);
     void onItemMoved(QCPAbstractItem *item, QMouseEvent *event);
     void update();
 
@@ -37,7 +49,7 @@ protected:
     QCPItemCurve *mTracerArrow;
     QCPGraph *mTargetGraph;
 
-    bool mTracing;
+    LineMode mLineMode;
     double mKey, mValue;
 
 protected:

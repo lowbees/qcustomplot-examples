@@ -35,8 +35,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(customPlot, &QCustomPlot::mouseRelease, [customPlot](){
         customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectItems);
     });
-
-    connect(customPlot, SIGNAL(sizeChanged(QSize)), crossLine, SLOT(update()));
 }
 
 MainWindow::~MainWindow()

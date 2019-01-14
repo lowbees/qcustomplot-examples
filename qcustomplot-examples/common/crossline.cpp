@@ -15,15 +15,18 @@ CrossLine::CrossLine(QCustomPlot *parentPlot, QCPGraph *targetGraph)
 //    , mTracerText(new QCPItemText(parentPlot))
 //    , mTracerArrow(new QCPItemCurve(parentPlot))
     , mTargetGraph(Q_NULLPTR)
-    , mTracing(false)
     , mKey(0)
     , mValue(0)
 {
     const QString layer(QStringLiteral("overlay"));
     const QMargins margins(6, 6, 6, 6);
 
-    setGraph(targetGraph);
+    mTargetGraph = targetGraph ? targetGraph : mParentPlot->graph();
 
+    setLineMode(lmTracing);
+
+    mTracer->setGraph(mTargetGraph);
+    mTracer->setGraphKey(0);
     mTracer->setBrush(Qt::red);
     mTracer->setInterpolating(true);
     mTracer->setStyle(QCPItemTracer::tsCircle);
@@ -43,12 +46,53 @@ CrossLine::CrossLine(QCustomPlot *parentPlot, QCPGraph *targetGraph)
     mVText->setPadding(margins);
     mVText->setLayer(layer);
 
+    if (mTargetGraph->keyAxis()->orientation() == Qt::Horizontal) {
+        mHText->position->setParentAnchor(mHLine->start);
+        mVText->position->setParentAnchor(mVLine->end);
+    } else {
+        mHText->position->setParentAnchor(mHLine->end);
+        mVText->position->setParentAnchor(mVLine->start);
+    }
+
     connect(parentPlot, SIGNAL(afterReplot()), this, SLOT(update()));
 }
 
 CrossLine::~CrossLine()
 {
 
+}
+
+void CrossLine::setLineMode(CrossLine::LineMode mode)
+{
+    CursorHelper *helper = CursorHelper::instance();
+
+    mTracer->setVisible(mode == lmTracing);
+    mHLine->setSelectable(mode == lmFree);
+    mVLine->setSelectable(mode != lmFollowCursor);
+
+    if (mode == lmFollowCursor) {
+        connect(mParentPlot, SIGNAL(mouseMove(QMouseEvent*)),
+                this, SLOT(onMouseMoved(QMouseEvent*)));
+
+        helper->remove(mHLine);
+        helper->remove(mVLine);
+    } else {
+        disconnect(mParentPlot, SIGNAL(mouseMove(QMouseEvent*)),
+                   this, SLOT(onMouseMoved(QMouseEvent*)));
+
+        if (mTargetGraph->keyAxis()->orientation() == Qt::Horizontal) {
+            helper->setCursor(mVLine, QCursor(Qt::SizeHorCursor));
+            helper->setCursor(mHLine, QCursor(Qt::SizeVerCursor));
+        } else {
+            helper->setCursor(mVLine, QCursor(Qt::SizeVerCursor));
+            helper->setCursor(mHLine, QCursor(Qt::SizeHorCursor));
+        }
+
+        if (mode == lmTracing) {
+            helper->remove(mHLine);
+        }
+    }
+    mLineMode = mode;
 }
 
 /*!
@@ -88,37 +132,20 @@ bool CrossLine::lineVisible(Qt::Orientation orientation)
  */
 void CrossLine::setGraph(QCPGraph *graph)
 {
-    mTracing = (graph != Q_NULLPTR);
+    if (graph == Q_NULLPTR || graph == mTargetGraph)
+        return;
+
     mTracer->setGraph(graph);
     mTracer->setGraphKey(0);
-    mTracer->setVisible(mTracing);
-    mHLine->setSelectable(!mTracing);
 
-    // make graph not null
-    graph = graph ? graph : (mTargetGraph ? mTargetGraph : mParentPlot->graph());
-
-    CursorHelper *helper = CursorHelper::instance();
-
-    if (graph->keyAxis()->orientation() == Qt::Horizontal) {
-        helper->setCursor(mVLine, QCursor(Qt::SizeHorCursor));
-        helper->setCursor(mHLine, QCursor(Qt::SizeVerCursor));
-
-        mHText->position->setParentAnchor(mHLine->start);
-        mVText->position->setParentAnchor(mVLine->end);
-    } else {
-        helper->setCursor(mVLine, QCursor(Qt::SizeVerCursor));
-        helper->setCursor(mHLine, QCursor(Qt::SizeHorCursor));
-
-        mHText->position->setParentAnchor(mHLine->end);
-        mVText->position->setParentAnchor(mVLine->start);
-    }
-
-    if (mTracing)
-        helper->remove(mHLine);
-
-    if (mTargetGraph)  // don't update first time for some cases
-        update();
     mTargetGraph = graph;
+    update();
+}
+
+void CrossLine::onMouseMoved(QMouseEvent *event)
+{
+    mTargetGraph->pixelsToCoords(event->localPos(), mKey, mValue);
+    update();
 }
 
 void CrossLine::onItemMoved(QCPAbstractItem *item, QMouseEvent *event)
@@ -140,11 +167,11 @@ void CrossLine::onItemMoved(QCPAbstractItem *item, QMouseEvent *event)
         value = valueAxis->pixelToCoord(localPos.x());
     }
 
-    if (mTracing) {
+    if (mLineMode == lmTracing) {
         mTracer->setGraphKey(key);
     } else {
-        if (item == mHLine) updateHLine(value);
-        else updateVLine(key);
+        if (item == mHLine) mValue = value;
+        else mKey = key;
     }
 
     update();
@@ -154,7 +181,7 @@ void CrossLine::update()
 {
     double key = mKey;
     double value = mValue;
-    if (mTracing) {
+    if (mLineMode == lmTracing) {
         mTracer->updatePosition();
         key = mTracer->position->key();
         value = mTracer->position->value();
